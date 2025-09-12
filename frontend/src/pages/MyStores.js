@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { storeAPI } from '../utils/api';
-import { Star, Users, Eye, Store, MapPin, Calendar } from 'lucide-react';
+import { Star, Users, Eye, Store, MapPin, Calendar, Plus } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Modal from '../components/UI/Modal';
+import AddStoreForm from '../components/AddStoreForm';
 import toast from 'react-hot-toast';
 
 const MyStores = () => {
   const [stores, setStores] = useState([]);
-  const [selectedStoreRatings, setSelectedStoreRatings] = useState([]);
+  const [selectedStoreRatings, setSelectedStoreRatings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [ratingsLoading, setRatingsLoading] = useState(false);
   const [isRatingsModalOpen, setIsRatingsModalOpen] = useState(false);
+  const [isAddStoreModalOpen, setIsAddStoreModalOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ const MyStores = () => {
     } catch (error) {
       console.error('Error loading store ratings:', error);
       toast.error('Failed to load store ratings');
-      setSelectedStoreRatings([]);
+      setSelectedStoreRatings(null);
     } finally {
       setRatingsLoading(false);
     }
@@ -46,7 +48,7 @@ const MyStores = () => {
 
   const viewRatings = async (store) => {
     setSelectedStore(store);
-    setSelectedStoreRatings([]);
+    setSelectedStoreRatings(null);
     setIsRatingsModalOpen(true);
     await loadStoreRatings(store.id);
   };
@@ -54,7 +56,11 @@ const MyStores = () => {
   const closeRatingsModal = () => {
     setIsRatingsModalOpen(false);
     setSelectedStore(null);
-    setSelectedStoreRatings([]);
+    setSelectedStoreRatings(null);
+  };
+
+  const handleStoreAdded = () => {
+    loadMyStores(); // Refresh stores list
   };
 
   const calculateOverallStats = () => {
@@ -88,11 +94,13 @@ const MyStores = () => {
             Manage and monitor your store performance
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {stores.length} store{stores.length !== 1 ? 's' : ''}
-          </div>
-        </div>
+        <button
+          onClick={() => setIsAddStoreModalOpen(true)}
+          className="btn-primary"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Add New Store</span>
+        </button>
       </div>
 
       {/* Overview Stats */}
@@ -165,9 +173,12 @@ const MyStores = () => {
                       <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                         {store.name}
                       </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {store.email}
+                      </p>
                       <div className="flex items-center text-gray-500 dark:text-gray-400 mt-1">
                         <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
-                        <p className="text-sm">{store.address}</p>
+                        <p className="text-sm">{store.address || 'No address provided'}</p>
                       </div>
                       <div className="flex items-center text-gray-500 dark:text-gray-400 mt-1">
                         <Calendar className="h-4 w-4 mr-1 flex-shrink-0" />
@@ -239,21 +250,27 @@ const MyStores = () => {
             <Store className="h-16 w-16 mx-auto" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-            No stores assigned
+            No stores created yet
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
-            You don't have any stores assigned to your account yet.
+            Create your first store to start receiving ratings from customers.
           </p>
-          <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-            <p>Contact the administrator to:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Get stores assigned to your account</li>
-              <li>Create new stores for your business</li>
-              <li>Update your store owner permissions</li>
-            </ul>
-          </div>
+          <button
+            onClick={() => setIsAddStoreModalOpen(true)}
+            className="btn-primary"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Your First Store</span>
+          </button>
         </div>
       )}
+
+      {/* Add Store Modal */}
+      <AddStoreForm
+        isOpen={isAddStoreModalOpen}
+        onClose={() => setIsAddStoreModalOpen(false)}
+        onStoreAdded={handleStoreAdded}
+      />
 
       {/* Store Ratings Modal */}
       <Modal
@@ -272,17 +289,19 @@ const MyStores = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {selectedStore.address}
               </p>
-              <div className="flex items-center mt-2 space-x-4">
-                <div className="flex items-center space-x-1">
-                  <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                  <span className="text-sm font-medium">
-                    {parseFloat(selectedStore.average_rating || 0).toFixed(1)} average
-                  </span>
+              {selectedStoreRatings && (
+                <div className="flex items-center mt-2 space-x-4">
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm font-medium">
+                      {selectedStoreRatings.summary.averageRating} average
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedStoreRatings.summary.totalRatings} total reviews
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  {selectedStore.total_ratings} total reviews
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -291,9 +310,9 @@ const MyStores = () => {
             <div className="flex items-center justify-center py-8">
               <LoadingSpinner size="md" />
             </div>
-          ) : selectedStoreRatings.length > 0 ? (
+          ) : selectedStoreRatings && selectedStoreRatings.ratings.length > 0 ? (
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {selectedStoreRatings.map((rating, index) => (
+              {selectedStoreRatings.ratings.map((rating, index) => (
                 <div
                   key={index}
                   className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-200"
@@ -301,10 +320,10 @@ const MyStores = () => {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <p className="font-medium text-gray-900 dark:text-gray-100">
-                        {rating.name}
+                        {rating.user_name}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {rating.email}
+                        {rating.user_email}
                       </p>
                     </div>
                     <div className="text-right">
@@ -327,14 +346,16 @@ const MyStores = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    Rated on {new Date(rating.created_at).toLocaleString()}
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Rated on {new Date(rating.created_at).toLocaleDateString()}</span>
+                    {rating.updated_at !== rating.created_at && (
+                      <span>Updated on {new Date(rating.updated_at).toLocaleDateString()}</span>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
+          ) : selectedStoreRatings ? (
             <div className="text-center py-8">
               <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 mb-2">
@@ -344,7 +365,7 @@ const MyStores = () => {
                 Encourage customers to leave their first review!
               </p>
             </div>
-          )}
+          ) : null}
 
           {/* Modal Footer */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">

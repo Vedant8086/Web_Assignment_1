@@ -43,7 +43,8 @@ export const userAPI = {
 // Store API
 export const storeAPI = {
   getAllStores: (params = {}) => api.get('/stores', { params }),
-  createStore: (storeData) => api.post('/stores', storeData),
+  createStore: (storeData) => api.post('/stores', storeData), // For admin
+  createOwnStore: (storeData) => api.post('/stores/create-own', storeData), // For store owner
   getMyStores: () => api.get('/stores/my-stores'),
   getStoreRatings: (storeId) => api.get(`/stores/${storeId}/ratings`),
 };
