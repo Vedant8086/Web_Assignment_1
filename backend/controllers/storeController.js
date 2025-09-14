@@ -1,37 +1,58 @@
-const { validationResult } = require('express-validator');
 const pool = require('../config/database');
+const { validationResult } = require('express-validator');
 
-// Add the missing getAllStores function
+// Get all stores (for users and admin)
 const getAllStores = async (req, res) => {
   try {
-    const { name, address, sortBy = 'name', sortOrder = 'asc' } = req.query;
-    const userId = req.user.id;
+    const { name, email, address, sortBy = 'name', sortOrder = 'asc' } = req.query;
+    const userId = req.user ? req.user.id : null;
     
     let query = `
-      SELECT s.id, s.name, s.email, s.address, s.created_at,
-             COALESCE(AVG(r.rating), 0) as overall_rating,
-             ur.rating as user_rating
-      FROM stores s
-      LEFT JOIN ratings r ON s.id = r.store_id
-      LEFT JOIN ratings ur ON s.id = ur.store_id AND ur.user_id = $1
-      WHERE 1=1
+      SELECT s.id, s.name, s.email, s.address, s.owner_id, s.created_at,
+             COALESCE(AVG(r.rating), 0) as overall_rating
     `;
     
-    const params = [userId];
-    let paramCount = 1;
+    // Add user rating only for regular users, not admin
+    if (userId && req.user.role === 'user') {
+      query += `, ur.rating as user_rating
+      FROM stores s
+      LEFT JOIN ratings r ON s.id = r.store_id
+      LEFT JOIN ratings ur ON s.id = ur.store_id AND ur.user_id = $1`;
+    } else {
+      query += `
+      FROM stores s
+      LEFT JOIN ratings r ON s.id = r.store_id`;
+    }
+    
+    query += ` WHERE 1=1`;
+    
+    const params = userId && req.user.role === 'user' ? [userId] : [];
+    let paramCount = params.length;
 
     if (name) {
       paramCount++;
       query += ` AND s.name ILIKE $${paramCount}`;
       params.push(`%${name}%`);
     }
+    
+    if (email) {
+      paramCount++;
+      query += ` AND s.email ILIKE $${paramCount}`;
+      params.push(`%${email}%`);
+    }
+    
     if (address) {
       paramCount++;
       query += ` AND s.address ILIKE $${paramCount}`;
       params.push(`%${address}%`);
     }
 
-    query += ` GROUP BY s.id, s.name, s.email, s.address, s.created_at, ur.rating`;
+    if (userId && req.user.role === 'user') {
+      query += ` GROUP BY s.id, s.name, s.email, s.address, s.owner_id, s.created_at, ur.rating`;
+    } else {
+      query += ` GROUP BY s.id, s.name, s.email, s.address, s.owner_id, s.created_at`;
+    }
+    
     query += ` ORDER BY ${sortBy} ${sortOrder.toUpperCase()}`;
 
     const result = await pool.query(query, params);
@@ -42,7 +63,7 @@ const getAllStores = async (req, res) => {
   }
 };
 
-// Admin function to create stores with specified owner
+// Admin: Create store with specified owner
 const createStore = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -122,6 +143,7 @@ const getStoresByOwner = async (req, res) => {
         s.name, 
         s.email, 
         s.address, 
+        s.owner_id,
         s.created_at,
         COALESCE(AVG(r.rating), 0) as average_rating,
         COUNT(r.id) as total_ratings,
@@ -129,7 +151,7 @@ const getStoresByOwner = async (req, res) => {
       FROM stores s
       LEFT JOIN ratings r ON s.id = r.store_id
       WHERE s.owner_id = $1
-      GROUP BY s.id, s.name, s.email, s.address, s.created_at
+      GROUP BY s.id, s.name, s.email, s.address, s.owner_id, s.created_at
       ORDER BY s.created_at DESC
     `, [ownerId]);
 
@@ -188,11 +210,69 @@ const getStoreRatings = async (req, res) => {
   }
 };
 
-// Fix the module.exports - make sure all exported functions are defined above
+// Store owner: update own store (THIS WAS MISSING - CAUSING THE ERROR)
+const updateStoreByOwner = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const storeId = parseInt(req.params.id);
+    const ownerId = req.user.id;
+    const { name, email, address } = req.body;
+
+    // Verify ownership
+    const storeCheck = await pool.query('SELECT * FROM stores WHERE id = $1 AND owner_id = $2', [storeId, ownerId]);
+    if (storeCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Store not found or access denied' });
+    }
+
+    // Prepare fields for update (owner can't change owner_id)
+    const fieldsToUpdate = {};
+    if (name) fieldsToUpdate.name = name;
+    if (email) fieldsToUpdate.email = email;
+    if (address) fieldsToUpdate.address = address;
+
+    const allowedFields = ['name', 'email', 'address'];
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    allowedFields.forEach(field => {
+      if (fieldsToUpdate[field] !== undefined) {
+        updates.push(`${field} = $${paramIndex}`);
+        values.push(fieldsToUpdate[field]);
+        paramIndex++;
+      }
+    });
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: 'No valid fields provided for update' });
+    }
+
+    // Add storeId
+    values.push(storeId);
+    const sql = `
+      UPDATE stores 
+      SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $${paramIndex} 
+      RETURNING id, name, email, address, owner_id, created_at, updated_at
+    `;
+
+    const result = await pool.query(sql, values);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('UpdateStoreByOwner error:', error);
+    res.status(500).json({ message: 'Server error while updating store' });
+  }
+};
+
 module.exports = {
-  getAllStores,           // Now properly defined
-  createStore,           // For admin use
-  createStoreForOwner,   // For store owners
-  getStoresByOwner,      // Get owner's stores
-  getStoreRatings        // Get ratings for a store
+  getAllStores,
+  createStore,
+  createStoreForOwner,
+  getStoresByOwner,
+  getStoreRatings,
+  updateStoreByOwner  // THIS EXPORT WAS MISSING - ROOT CAUSE OF ERROR
 };

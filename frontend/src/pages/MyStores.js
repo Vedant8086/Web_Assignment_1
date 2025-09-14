@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { storeAPI } from '../utils/api';
-import { Star, Users, Eye, Store, MapPin, Calendar, Plus } from 'lucide-react';
+import { Star, Users, Eye, Store, MapPin, Calendar, Plus, Mail, Edit } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Modal from '../components/UI/Modal';
-import AddStoreForm from '../components/AddStoreForm';
 import toast from 'react-hot-toast';
 
 const MyStores = () => {
@@ -13,7 +13,12 @@ const MyStores = () => {
   const [ratingsLoading, setRatingsLoading] = useState(false);
   const [isRatingsModalOpen, setIsRatingsModalOpen] = useState(false);
   const [isAddStoreModalOpen, setIsAddStoreModalOpen] = useState(false);
+  const [isEditStoreModalOpen, setIsEditStoreModalOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
+  const [storeToEdit, setStoreToEdit] = useState(null);
+
+  const { register: registerAdd, handleSubmit: handleAddSubmit, reset: resetAdd, formState: { errors: addErrors, isSubmitting: isAdding } } = useForm();
+  const { register: registerEdit, handleSubmit: handleEditSubmit, reset: resetEdit, formState: { errors: editErrors, isSubmitting: isEditing } } = useForm();
 
   useEffect(() => {
     loadMyStores();
@@ -59,8 +64,46 @@ const MyStores = () => {
     setSelectedStoreRatings(null);
   };
 
-  const handleStoreAdded = () => {
-    loadMyStores(); // Refresh stores list
+  const handleAddStore = async (data) => {
+    try {
+      await storeAPI.createOwnStore(data);
+      toast.success('Store created successfully!');
+      setIsAddStoreModalOpen(false);
+      resetAdd();
+      loadMyStores();
+    } catch (error) {
+      console.error('Error creating store:', error);
+      toast.error(error.response?.data?.message || 'Failed to create store');
+    }
+  };
+
+  const handleEditStore = (store) => {
+    setStoreToEdit(store);
+    resetEdit({
+      name: store.name || '',
+      email: store.email || '',
+      address: store.address || '',
+    });
+    setIsEditStoreModalOpen(true);
+  };
+
+  const handleStoreUpdate = async (data) => {
+    try {
+      // Filter out empty values
+      const filteredData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value && value.trim() !== '')
+      );
+
+      await storeAPI.updateStoreByOwner(storeToEdit.id, filteredData);
+      toast.success(`Store "${storeToEdit.name}" updated successfully`);
+      setIsEditStoreModalOpen(false);
+      setStoreToEdit(null);
+      resetEdit();
+      loadMyStores();
+    } catch (error) {
+      console.error('Error updating store:', error);
+      toast.error(error.response?.data?.message || 'Failed to update store');
+    }
   };
 
   const calculateOverallStats = () => {
@@ -167,25 +210,48 @@ const MyStores = () => {
             {stores.map((store) => (
               <div key={store.id} className="card p-6 hover:shadow-xl transition-all duration-300">
                 <div className="space-y-4">
-                  {/* Store Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                        {store.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {store.email}
-                      </p>
-                      <div className="flex items-center text-gray-500 dark:text-gray-400 mt-1">
-                        <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
-                        <p className="text-sm">{store.address || 'No address provided'}</p>
+                  {/* Store Header with All Details */}
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                          {store.name}
+                        </h3>
+                        
+                        {/* Store Email */}
+                        <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                          <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
+                          <a 
+                            href={`mailto:${store.email}`}
+                            className="text-primary-600 dark:text-primary-400 hover:text-primary-500 hover:underline text-sm"
+                          >
+                            {store.email}
+                          </a>
+                        </div>
+                        
+                        {/* Store Address */}
+                        <div className="flex items-center text-gray-500 dark:text-gray-400 mb-2">
+                          <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
+                          <p className="text-sm">{store.address || 'Address not specified'}</p>
+                        </div>
+                        
+                        {/* Creation Date */}
+                        <div className="flex items-center text-gray-500 dark:text-gray-400">
+                          <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
+                          <p className="text-sm">
+                            Since {new Date(store.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center text-gray-500 dark:text-gray-400 mt-1">
-                        <Calendar className="h-4 w-4 mr-1 flex-shrink-0" />
-                        <p className="text-sm">
-                          Since {new Date(store.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
+                      
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => handleEditStore(store)}
+                        className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200"
+                        title="Edit store details"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
 
@@ -266,11 +332,212 @@ const MyStores = () => {
       )}
 
       {/* Add Store Modal */}
-      <AddStoreForm
+      <Modal
         isOpen={isAddStoreModalOpen}
-        onClose={() => setIsAddStoreModalOpen(false)}
-        onStoreAdded={handleStoreAdded}
-      />
+        onClose={() => {
+          setIsAddStoreModalOpen(false);
+          resetAdd();
+        }}
+        title="Add New Store"
+      >
+        <form onSubmit={handleAddSubmit(handleAddStore)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Store Name</label>
+            <div className="relative">
+              <Store className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                {...registerAdd('name', { required: 'Store name is required' })}
+                className={`input-field pl-10 ${addErrors.name ? 'border-red-500' : ''}`}
+                placeholder="Enter store name"
+              />
+            </div>
+            {addErrors.name && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {addErrors.name.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Store Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="email"
+                {...registerAdd('email', {
+                  required: 'Email is required',
+                  pattern: { value: /\S+@\S+\.\S+/, message: 'Invalid email format' }
+                })}
+                className={`input-field pl-10 ${addErrors.email ? 'border-red-500' : ''}`}
+                placeholder="Enter store email"
+              />
+            </div>
+            {addErrors.email && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {addErrors.email.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Store Address</label>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <textarea
+                {...registerAdd('address', {
+                  maxLength: { value: 400, message: 'Address cannot exceed 400 characters' }
+                })}
+                rows="3"
+                className={`input-field pl-10 resize-none ${addErrors.address ? 'border-red-500' : ''}`}
+                placeholder="Enter store address"
+              />
+            </div>
+            {addErrors.address && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {addErrors.address.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex space-x-4 pt-4">
+            <button
+              type="submit"
+              disabled={isAdding}
+              className="btn-primary flex-1"
+            >
+              {isAdding ? <LoadingSpinner size="sm" /> : 'Create Store'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddStoreModalOpen(false);
+                resetAdd();
+              }}
+              className="btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Store Modal */}
+      <Modal
+        isOpen={isEditStoreModalOpen}
+        onClose={() => {
+          setIsEditStoreModalOpen(false);
+          setStoreToEdit(null);
+          resetEdit();
+        }}
+        title={`Edit Store: ${storeToEdit?.name}`}
+      >
+        {storeToEdit && (
+          <div className="space-y-4">
+            {/* Current Store Details */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                Current Store Details:
+              </h4>
+              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center">
+                  <Store className="h-4 w-4 mr-2" />
+                  <span><strong>Name:</strong> {storeToEdit.name}</span>
+                </div>
+                <div className="flex items-center">
+                  <Mail className="h-4 w-4 mr-2" />
+                  <span><strong>Email:</strong> {storeToEdit.email}</span>
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  <span><strong>Address:</strong> {storeToEdit.address || 'Not specified'}</span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditSubmit(handleStoreUpdate)} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Store Name</label>
+                <div className="relative">
+                  <Store className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    {...registerEdit('name')}
+                    className={`input-field pl-10 ${editErrors.name ? 'border-red-500' : ''}`}
+                    placeholder="Enter store name"
+                  />
+                </div>
+                {editErrors.name && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {editErrors.name.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Store Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="email"
+                    {...registerEdit('email', {
+                      pattern: { value: /\S+@\S+\.\S+/, message: 'Invalid email format' }
+                    })}
+                    className={`input-field pl-10 ${editErrors.email ? 'border-red-500' : ''}`}
+                    placeholder="Enter store email"
+                  />
+                </div>
+                {editErrors.email && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {editErrors.email.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Store Address</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <textarea
+                    {...registerEdit('address', {
+                      maxLength: { value: 400, message: 'Address cannot exceed 400 characters' }
+                    })}
+                    rows="3"
+                    className={`input-field pl-10 resize-none ${editErrors.address ? 'border-red-500' : ''}`}
+                    placeholder="Enter store address"
+                  />
+                </div>
+                {editErrors.address && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {editErrors.address.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button
+                  type="submit"
+                  disabled={isEditing}
+                  className="btn-primary flex-1"
+                >
+                  {isEditing ? <LoadingSpinner size="sm" /> : 'Update Store'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditStoreModalOpen(false);
+                    setStoreToEdit(null);
+                    resetEdit();
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </Modal>
 
       {/* Store Ratings Modal */}
       <Modal
