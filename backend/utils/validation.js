@@ -13,8 +13,12 @@ const registerValidation = [
     .matches(/^(?=.*[A-Z])(?=.*[!@#$%^&*])/)
     .withMessage('Password must contain at least one uppercase letter and one special character'),
   body('address')
+    .optional()
     .isLength({ max: 400 })
-    .withMessage('Address cannot exceed 400 characters')
+    .withMessage('Address cannot exceed 400 characters'),
+  body('role')
+    .isIn(['user', 'store_owner'])
+    .withMessage('Role must be either "user" or "store_owner"')
 ];
 
 const loginValidation = [
@@ -34,6 +38,7 @@ const storeValidation = [
     .isEmail()
     .withMessage('Please provide a valid email'),
   body('address')
+    .optional()
     .isLength({ max: 400 })
     .withMessage('Address cannot exceed 400 characters')
 ];

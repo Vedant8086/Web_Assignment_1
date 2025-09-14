@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, User, Mail, Lock, MapPin, Moon, Sun } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, MapPin, Moon, Sun, Users } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 
 const Register = () => {
@@ -166,6 +166,36 @@ const Register = () => {
                   {errors.address.message}
                 </p>
               )}
+            </div>
+
+            {/* User Type Selection - NEW */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Account Type
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  {...register('role', {
+                    required: 'Please select an account type',
+                  })}
+                  className={`input-field pl-10 ${
+                    errors.role ? 'border-red-500 focus:ring-red-500' : ''
+                  }`}
+                >
+                  <option value="">Select Account Type</option>
+                  <option value="user">User - Rate and review stores</option>
+                  <option value="store_owner">Store Owner - Manage my stores</option>
+                </select>
+              </div>
+              {errors.role && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {errors.role.message}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Choose "User" to rate stores or "Store Owner" to manage your own stores
+              </p>
             </div>
 
             {/* Password Field */}

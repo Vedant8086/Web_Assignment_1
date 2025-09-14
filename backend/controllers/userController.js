@@ -14,7 +14,7 @@ const register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, address } = req.body;
+    const { name, email, password, address, role } = req.body; // Include role
 
     // Check if user exists
     const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -25,10 +25,10 @@ const register = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with the specified role
     const newUser = await pool.query(
       'INSERT INTO users (name, email, password, address, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, address, role',
-      [name, email, hashedPassword, address, 'user']
+      [name, email, hashedPassword, address, role] // Use role from request
     );
 
     const token = generateToken(newUser.rows[0].id);
@@ -39,6 +39,37 @@ const register = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const createUser = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, email, password, address, role } = req.body; // Include role
+
+    // Check if user exists
+    const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user with specified role
+    const newUser = await pool.query(
+      'INSERT INTO users (name, email, password, address, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, address, role',
+      [name, email, hashedPassword, address, role] // Use role from request
+    );
+
+    res.status(201).json(newUser.rows[0]);
+  } catch (error) {
+    console.error('Create user error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -150,36 +181,36 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-const createUser = async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+// const createUser = async (req, res) => {
+//   try {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({ errors: errors.array() });
+//     }
 
-    const { name, email, password, address, role } = req.body;
+//     const { name, email, password, address, role } = req.body;
 
-    // Check if user exists
-    const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
+//     // Check if user exists
+//     const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+//     if (existingUser.rows.length > 0) {
+//       return res.status(400).json({ message: 'User already exists' });
+//     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+//     // Hash password
+//     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const newUser = await pool.query(
-      'INSERT INTO users (name, email, password, address, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, address, role',
-      [name, email, hashedPassword, address, role]
-    );
+//     // Create user
+//     const newUser = await pool.query(
+//       'INSERT INTO users (name, email, password, address, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, address, role',
+//       [name, email, hashedPassword, address, role]
+//     );
 
-    res.status(201).json(newUser.rows[0]);
-  } catch (error) {
-    console.error('Create user error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+//     res.status(201).json(newUser.rows[0]);
+//   } catch (error) {
+//     console.error('Create user error:', error);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
 
 const getDashboardStats = async (req, res) => {
   try {
