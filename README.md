@@ -112,8 +112,8 @@ cd backend
 # Install dependencies
 npm install
 
-# Create environment file
-cp .env.example .env
+# Install Morgan Package
+npm install morgan
 ```
 
 ### 3. Frontend Setup
