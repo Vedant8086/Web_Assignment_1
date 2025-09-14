@@ -136,11 +136,10 @@ cp .env.example .env
 psql -U postgres
 
 # Create database
-CREATE DATABASE storerating_db;
+createdb -U postgres store_rating_system
 
-# Create user (optional)
-CREATE USER storerating_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE storerating_db TO storerating_user;
+# Load Database Schema
+psql -U vedan -d store_rating_system -f database/schema.sql
 ```
 
 ### 5. Database Schema
